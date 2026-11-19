@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class PlatformAttachment2D : MonoBehaviour
 {
-    [SerializeField] private string platformTag = "Platform";
+    [SerializeField] private string[] platformTags = { "Platform", "Invisible" };
     [SerializeField] private bool requireTopContact = true;
     [SerializeField, Min(0f)] private float minimumUpwardNormal = 0.5f;
 
@@ -31,7 +31,7 @@ public class PlatformAttachment2D : MonoBehaviour
 
     private void TryAttachToPlatform(Collision2D collision)
     {
-        if (!collision.gameObject.CompareTag(platformTag))       return;
+        if (!HasPlatformTag(collision.gameObject))               return;
         if (requireTopContact && !IsContactFromAbove(collision)) return;
         if (currentPlatform == null) originalParent = transform.parent;
 
@@ -42,6 +42,19 @@ public class PlatformAttachment2D : MonoBehaviour
             transform.SetParent(platform, true);
             currentPlatform = platform;
         }
+    }
+
+    private bool HasPlatformTag(GameObject platform)
+    {
+        foreach (string tag in platformTags)
+        {
+            if (!string.IsNullOrEmpty(tag) && platform.CompareTag(tag))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool IsContactFromAbove(Collision2D collision)

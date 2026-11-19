@@ -7,6 +7,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isGrounded = false;
     public float thrust = 7.5f;
     public float speed = 5f;
+    public string[] jumpableTags = { "Platform", "Invisible", "Breakable" };
 
     void Awake()
     {
@@ -36,13 +37,27 @@ public class PlayerMovement : MonoBehaviour
         isGrounded = false;
     }
 
+    public void IncreaseJumpPower(float amount)
+    {
+        thrust += amount;
+    }
+
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Platform"))
+        if (HasJumpableTag(collision.gameObject.tag))
         {
             isGrounded = true;
             isJumping = false;
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
         }
+    }
+
+    private bool HasJumpableTag(string tag)
+    {
+        foreach (string jumpableTag in jumpableTags)
+        {
+            if (tag == jumpableTag) return true;
+        }
+        return false;
     }
 }

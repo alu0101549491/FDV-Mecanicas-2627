@@ -5,6 +5,8 @@ TagManager:
   serializedVersion: 3
   tags:
   - Platform
+  - Invisible
+  - Breakable
   layers:
   - Default
   - TransparentFX
@@ -12,7 +14,9 @@ TagManager:
   - 
   - Water
   - UI
-  - Ground
+  - Platform
+  - InvisiblePlatform
+  - BreakablePlatform
   - Enemy
   - NoCollis
   - 
@@ -36,11 +40,21 @@ TagManager:
   - 
   - 
   - 
-  - 
-  - 
   m_SortingLayers:
+  - name: Background
+    uniqueID: 2541550295
+    locked: 0
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Platform
+    uniqueID: 1694405593
+    locked: 0
+  - name: Invisible Platform
+    uniqueID: 2168596253
+    locked: 0
+  - name: Breakable Platform
+    uniqueID: 4229587955
     locked: 0
   - name: Decorations
     uniqueID: 987707781

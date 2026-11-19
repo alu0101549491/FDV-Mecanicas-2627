@@ -149,7 +149,7 @@ private void OnCollisionEnter2D(Collision2D other)
 
 ## Plataformas
 
-1. Salto a una plataforma: Esta mecánica se consigue con objetos físicos puesto que hay que implementar un salto, sin embargo, en este caso es necesario detectar la colisión con la plataforma y convertir el sistema de referencia del jugador en hijo de la plataforma. De esta forma conseguiremos que el jugador se mueva sobre/con ella. Del mismo modo una vez que el jugador no esté sobre la plataforma, debemos desvincularla de ella. Esto lo manejaremos cuando se produzca un evento. Desarrollar la versión para plataforma estática y plataforma en movimiento.
+Salto a una plataforma: Esta mecánica se consigue con objetos físicos puesto que hay que implementar un salto, sin embargo, en este caso es necesario detectar la colisión con la plataforma y convertir el sistema de referencia del jugador en hijo de la plataforma. De esta forma conseguiremos que el jugador se mueva sobre/con ella. Del mismo modo una vez que el jugador no esté sobre la plataforma, debemos desvincularla de ella. Esto lo manejaremos cuando se produzca un evento. Desarrollar la versión para plataforma estática y plataforma en movimiento.
 
 ```csharp
 void OnCollisionExit2D(Collision2D collision)
@@ -160,7 +160,7 @@ void OnCollisionExit2D(Collision2D collision)
 ```csharp
 public class PlatformAttachment2D : MonoBehaviour
 {
-    [SerializeField] private string platformTag = "Platform";
+    [SerializeField] private string[] platformTags = { "Platform" };
     [SerializeField] private bool requireTopContact = true;
     [SerializeField, Min(0f)] private float minimumUpwardNormal = 0.5f;
 
@@ -189,7 +189,7 @@ public class PlatformAttachment2D : MonoBehaviour
 
     private void TryAttachToPlatform(Collision2D collision)
     {
-        if (!collision.gameObject.CompareTag(platformTag))       return;
+        if (!HasPlatformTag(collision.gameObject))               return;
         if (requireTopContact && !IsContactFromAbove(collision)) return;
         if (currentPlatform == null) originalParent = transform.parent;
 
@@ -200,6 +200,19 @@ public class PlatformAttachment2D : MonoBehaviour
             transform.SetParent(platform, true);
             currentPlatform = platform;
         }
+    }
+
+    private bool HasPlatformTag(GameObject platform)
+    {
+        foreach (string tag in platformTags)
+        {
+            if (!string.IsNullOrEmpty(tag) && platform.CompareTag(tag))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool IsContactFromAbove(Collision2D collision)
@@ -231,7 +244,7 @@ public class PlatformAttachment2D : MonoBehaviour
 
 ## Colisiones con Capas
 
-1. Manejar colisiones con elementos de una capa determinada: Podemos utilizar las capas para que el efecto de las colisiones sólo se tenga en cuenta cuando se pertenece a una determinada capa, o se descarten.
+Manejar colisiones con elementos de una capa determinada: Podemos utilizar las capas para que el efecto de las colisiones sólo se tenga en cuenta cuando se pertenece a una determinada capa, o se descarten.
 
 ```csharp
 void OnCollisionExit2D(Collision2D collision) {
@@ -280,3 +293,226 @@ public class EnemyCollision2D : MonoBehaviour
 
 ![Colisiones con Capas](Media/Colisiones.gif)
 
+## Plataformas Invisibles
+
+Plataformas invisibles que se vuelven visibles mientras el jugador está sobre ellas: deben tener el tag `Invisible` y conservar activo su collider. El script se coloca en el jugador, oculta las plataformas al iniciar y muestra todos sus renderers mientras el jugador las toca desde arriba:
+
+**Resultado:**
+
+```csharp
+public class InvisiblePlatformReveal2D : MonoBehaviour
+{
+    private readonly HashSet<GameObject> revealedPlatforms = new HashSet<GameObject>();
+
+    private void Start()
+    {
+        GameObject[] invisiblePlatforms = GameObject.FindGameObjectsWithTag("Invisible");
+        foreach (GameObject platform in invisiblePlatforms)
+        {
+            SetPlatformVisibility(platform, false);
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        TryRevealPlatform(collision);
+    }
+
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        TryRevealPlatform(collision);
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        GameObject platform = FindInvisiblePlatform(collision.gameObject);
+        if (platform == null || !revealedPlatforms.Remove(platform)) return;
+
+        SetPlatformVisibility(platform, false);
+    }
+
+    private void TryRevealPlatform(Collision2D collision)
+    {
+        if (!Contact2D.IsContactFromAbove(collision)) return;
+
+        GameObject platform = FindInvisiblePlatform(collision.gameObject);
+        if (platform == null || !revealedPlatforms.Add(platform)) return;
+
+        SetPlatformVisibility(platform, true);
+    }
+
+    private GameObject FindInvisiblePlatform(GameObject collisionObject)
+    {
+        Transform current = collisionObject.transform;
+        while (current != null)
+        {
+            if (current.CompareTag("Invisible")) return current.gameObject;
+            current = current.parent;
+        }
+
+        return null;
+    }
+
+    private void SetPlatformVisibility(GameObject platform, bool isVisible)
+    {
+        Renderer[] renderers = platform.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers) renderer.enabled = isVisible;
+    }
+}
+```
+
+![Plataformas Invisibles](Media/PlataformasInvisibles.gif)
+
+## Plataforma que se Rompe
+
+Plataforma que se cae o rompe: El jugador físico, la plataforma cinemática, cuando el jugador salta a la plataforma establecer rigidbody dinámico a la plataforma, con esto conseguiremos que caiga. Activaremos una corrutina de espera: yield return new WaitForSeconds(0.5f); 
+
+**Resultado:**
+
+```csharp
+public class BreakablePlatform2D : MonoBehaviour
+{
+    [SerializeField] private string playerTag = "Player";
+    [SerializeField, Min(0f)] private float breakDelay = 0.5f;
+
+    private Rigidbody2D platformRigidbody;
+    private bool isBreaking;
+
+    private void Awake()
+    {
+        platformRigidbody = GetComponent<Rigidbody2D>();
+        if (platformRigidbody == null)
+        {
+            Debug.LogError("BreakablePlatform2D necesita un Rigidbody2D.", this);
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (isBreaking || platformRigidbody == null) return;
+        if (!collision.gameObject.CompareTag(playerTag)) return;
+        if (!Contact2D.IsContactFromAbove(collision, Vector2.down)) return;
+
+        isBreaking = true;
+        StartCoroutine(BreakPlatform());
+    }
+
+    private IEnumerator BreakPlatform()
+    {
+        yield return new WaitForSeconds(breakDelay);
+        platformRigidbody.bodyType = RigidbodyType2D.Dynamic;
+    }
+}
+```
+
+![Plataforma que se Rompe](Media/PlataformaQueSeRompe.gif)
+
+## Mecánica de Recolección
+
+Mecánica de recolección: La recolección de objetos se realiza implementando la lógica de la recolección en alguno de los eventos de colisión con ese objeto. En ocasiones se actualizará la UI, en otras se destruirá el objeto, en otras se mejora alguna característica del personaje. En esta tarea se debe implementar una mecánica en la que el jugador recolecte objetos que le supongan alguna recompensa. En concreto, aumentará su puntuación, al llega a un valor de incremento de puntuación, adquirirá más potencia de salto. La puntuación se mostrará continuamente en la pantalla. El objeto recolectado ya no se usará más.
+
+El jugador debe tener `PlayerCollection2D` y una referencia a un elemento `TextMeshProUGUI` para mostrar la puntuación. Cada objeto recolectable debe tener `Collectible2D`, un collider 2D y el tag configurado para el jugador. Por defecto, cada objeto suma 1 punto y cada 2 puntos aumenta la potencia del salto en 2.5.
+
+```csharp
+public class Collectible2D : MonoBehaviour
+{
+    [SerializeField] private string playerTag = "Player";
+    [SerializeField, Min(1)] private int scoreValue = 1;
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!other.CompareTag(playerTag)) return;
+
+        PlayerCollection2D collection = other.GetComponent<PlayerCollection2D>();
+        if (collection == null) return;
+
+        collection.AddScore(scoreValue);
+        Destroy(gameObject);
+    }
+}
+```
+
+```csharp
+public class PlayerCollection2D : MonoBehaviour
+{
+    [SerializeField] private TMP_Text scoreText;
+    [SerializeField, Min(1)] private int pointsForJumpUpgrade = 2;
+    [SerializeField, Min(0f)] private float jumpPowerIncrease = 2.5f;
+
+    private PlayerMovement playerMovement;
+    private PlayerMovementRaycast playerMovementRaycast;
+    private int score;
+    private int nextUpgradeScore;
+
+    public int Score => score;
+
+    private void Awake()
+    {
+        playerMovement = GetComponent<PlayerMovement>();
+        playerMovementRaycast = GetComponent<PlayerMovementRaycast>();
+        nextUpgradeScore = pointsForJumpUpgrade;
+        UpdateScoreText();
+    }
+
+    public void AddScore(int points)
+    {
+        if (points <= 0) return;
+
+        score += points;
+        while (score >= nextUpgradeScore)
+        {
+            IncreaseJumpPower();
+            nextUpgradeScore += pointsForJumpUpgrade;
+        }
+
+        UpdateScoreText();
+    }
+
+    private void IncreaseJumpPower()
+    {
+        if (playerMovement != null)
+        {
+            playerMovement.IncreaseJumpPower(jumpPowerIncrease);
+        }
+
+        if (playerMovementRaycast != null)
+        {
+            playerMovementRaycast.IncreaseJumpPower(jumpPowerIncrease);
+        }
+    }
+
+    private void UpdateScoreText()
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = $"Puntuación: {score}";
+        }
+    }
+}
+```
+
+```csharp
+public class PlayerMovement : MonoBehaviour
+{
+    public void IncreaseJumpPower(float amount)
+    {
+        thrust += amount;
+    }
+}
+```
+
+![Recolección](Media/Recoleccion.gif)
+
+## Disparo
+
+Mecánica de disparo: Desarrollo de la acción de disparo de forma incremental como se indica a continuación:
+
+- Sprite y visibilidad. Crea un GameObject con un sprite para el proyectil. Al iniciar el juego debe estar desactivado (SetActive(false)). Añade un botón de UI que lo active con SetActive(true). Crea una animación Vuelo para el proyectil que se reproduzca al activarse (estado por defecto del Animator). El personaje tendrá sus propias animaciones, con al menos la transición Idle → Dispara mediante un Trigger.
+
+- Jerarquía. Coloca el proyectil como hijo del jugador y comprueba que se mueve con él. Haz que el proyectil avance al activarse. Compara: (a) desactivar el SpriteRenderer (SpriteRenderer.enabled = false) del jugador y (b) desactivar el GameObject del jugador con SetActive(false). ¿Qué ocurre con el proyectil en cada caso? ¿Qué pasa si el jugador se mueve mientras el proyectil vuela?.
+
+- Ocultamiento automático. Haz que el proyectil se desactive solo, al cabo de un tiempo (usando una corrutina) o al terminar la animación (usando un Animation Event). Sincroniza el disparo del proyectil con el Trigger Dispara del personaje.
+
+- Prefab e instanciación. Convierte el proyectil en prefab y elimínalo de la escena. Desde el jugador, instáncialo en un punto de disparo al pulsar el botón, sin hacerlo hijo del jugador. Destrúyelo automáticamente con Destroy(gameObject, tiempo) o al chocar.
+
+- Disparo por eventos. Sustituye el botón por al pulsar una tecla o botón Disparo. Además, cuando el jugador colisione con un objeto determinado, debe lanzar un evento. Un componente Lanzador del jugador estará suscrito a ese evento y, al recibirlo, instanciará el proyectil.

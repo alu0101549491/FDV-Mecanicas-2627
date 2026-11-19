@@ -44,6 +44,11 @@ public class PlayerMovementRaycast : MonoBehaviour
         isJumping = false;
     }
 
+    public void IncreaseJumpPower(float amount)
+    {
+        thrust += amount;
+    }
+
     private bool CheckGrounded()
     {
         Vector2 origin;
