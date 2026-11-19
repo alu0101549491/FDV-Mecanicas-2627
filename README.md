@@ -361,7 +361,7 @@ public class InvisiblePlatformReveal2D : MonoBehaviour
 }
 ```
 
-![Plataformas Invisibles](Media/PlataformasInvisibles.gif)
+![Plataformas Invisibles](Media/PlataformaInvisible.gif)
 
 ## Plataforma que se Rompe
 
@@ -582,6 +582,171 @@ public class ProjectileMovement2D : MonoBehaviour
 
 - Ocultamiento automático. Haz que el proyectil se desactive solo, al cabo de un tiempo (usando una corrutina) o al terminar la animación (usando un Animation Event). Sincroniza el disparo del proyectil con el Trigger Dispara del personaje.
 
+En este paso, se añadió un tiempo de vida configurable al proyectil. El método `StartMoving()` inicia una corrutina que desactiva el proyectil después de ese tiempo.
+
+```csharp
+public class ProjectileMovement2D : MonoBehaviour
+{
+    [SerializeField, Min(0f)] private float speed = 5f;
+    [SerializeField, Min(0.1f)] private float activeTime = 2f;
+
+    private bool isMoving;
+    private Vector2 movementDirection;
+    private Coroutine disableCoroutine;
+
+    private void OnEnable()
+    {
+        isMoving = false;
+        movementDirection = Vector2.zero;
+        disableCoroutine = null;
+    }
+
+    private void Update()
+    {
+        if (!isMoving) return;
+
+        transform.Translate(movementDirection * speed * Time.deltaTime, Space.World);
+    }
+
+    public void StartMoving()
+    {
+        movementDirection = transform.right.normalized;
+        isMoving = true;
+
+        if (disableCoroutine != null)
+        {
+            StopCoroutine(disableCoroutine);
+        }
+
+        disableCoroutine = StartCoroutine(DisableAfterDelay());
+    }
+
+    private IEnumerator DisableAfterDelay()
+    {
+        yield return new WaitForSeconds(activeTime);
+        isMoving = false;
+        gameObject.SetActive(false);
+    }
+}
+```
+
+![DisparoOcultamiento](Media/DisparoOcultamiento.gif)
+
 - Prefab e instanciación. Convierte el proyectil en prefab y elimínalo de la escena. Desde el jugador, instáncialo en un punto de disparo al pulsar el botón, sin hacerlo hijo del jugador. Destrúyelo automáticamente con Destroy(gameObject, tiempo) o al chocar.
 
+Para la instanciación, se modificó `ProjectileActivation2D` para instanciar un prefab de proyectil en un punto de disparo al pulsar el botón. El proyectil se destruye automáticamente después de un tiempo.
+
+```csharp
+public class ProjectileActivation2D : MonoBehaviour
+{
+    [SerializeField] private ProjectileMovement2D projectilePrefab;
+    [SerializeField] private Transform firePoint;
+    [SerializeField] private Animator characterAnimator;
+    [SerializeField] private string shootTrigger = "Dispara";
+
+    private void Awake()
+    {
+        if (projectilePrefab == null)
+        {
+            Debug.LogError("ProjectileActivation2D necesita un prefab de proyectil.", this);
+        }
+
+        if (firePoint == null)
+        {
+            Debug.LogError("ProjectileActivation2D necesita un punto de disparo.", this);
+        }
+    }
+
+    public void ActivateProjectile()
+    {
+        if (projectilePrefab == null || firePoint == null) return;
+
+        ProjectileMovement2D projectile = Instantiate(
+            projectilePrefab,
+            firePoint.position,
+            firePoint.rotation
+        );
+        projectile.StartMoving();
+
+        if (characterAnimator != null)
+        {
+            characterAnimator.SetTrigger(shootTrigger);
+        }
+    }
+}
+```
+
+![DisparoPrefab](Media/DisparoPrefab.gif)
+
 - Disparo por eventos. Sustituye el botón por al pulsar una tecla o botón Disparo. Además, cuando el jugador colisione con un objeto determinado, debe lanzar un evento. Un componente Lanzador del jugador estará suscrito a ese evento y, al recibirlo, instanciará el proyectil.
+
+Por último, se añadió `ShootEventSource2D` a un objeto vacio en la escena que activa el evento. `ProjectileActivation2D` se suscribe a ese evento y activa el proyectil cuando se recibe. Además, al presionar el botón de Fire1 (click izquierdo), también se activa el proyectil.
+
+```csharp
+public class ProjectileActivation2D : MonoBehaviour
+{
+    [SerializeField] private string fireButton = "Fire1";
+    [SerializeField] private ShootEventSource2D shootEventSource;
+
+    private void OnEnable()
+    {
+        if (shootEventSource != null)
+        {
+            shootEventSource.ShootRequested += ActivateProjectile;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (shootEventSource != null)
+        {
+            shootEventSource.ShootRequested -= ActivateProjectile;
+        }
+    }
+
+    private void Update()
+    {
+        if (Input.GetButtonDown(fireButton))
+        {
+            ActivateProjectile();
+        }
+    }
+}
+```
+
+```csharp
+public class ShootEventSource2D : MonoBehaviour
+{
+    [SerializeField] private string playerTag = "Player";
+
+    public event UnityAction ShootRequested;
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        RequestShot(collision.gameObject);
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        RequestShot(other.gameObject);
+    }
+
+    private void RequestShot(GameObject other)
+    {
+        if (other.CompareTag(playerTag))
+        {
+            ShootRequested?.Invoke();
+        }
+    }
+}
+```
+
+![DisparoEventos](Media/DisparoEventos.gif)
+
+### Configuración final del disparo
+
+El jugador utiliza `ProjectileActivation2D` para controlar el disparo. El campo `projectilePrefab` contiene el prefab del proyectil y `firePoint` indica la posición y dirección desde la que aparece. El `FirePoint` es un objeto vacío hijo del jugador y su eje local `X` debe apuntar hacia delante.
+
+El prefab del proyectil contiene un `SpriteRenderer`, un `Animator` con la animación `Vuelo`, un `Rigidbody2D`, un `Collider2D` y `ProjectileMovement2D`. Al instanciarse, avanza en línea recta, reproduce su animación, se desactiva después del tiempo configurado y se destruye al colisionar.
+
+Para disparar por eventos se utiliza una zona con `Collider2D` configurado como `Is Trigger` y el componente `ShootEventSource2D`. Cuando el jugador, cuyo tag es `Player`, entra en la zona, se emite `ShootRequested` y el lanzador instancia el proyectil.

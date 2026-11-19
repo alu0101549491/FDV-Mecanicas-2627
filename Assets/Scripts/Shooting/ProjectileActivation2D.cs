@@ -2,38 +2,60 @@ using UnityEngine;
 
 public class ProjectileActivation2D : MonoBehaviour
 {
-    [SerializeField] private GameObject projectile;
+    [SerializeField] private ProjectileMovement2D projectilePrefab;
+    [SerializeField] private Transform firePoint;
     [SerializeField] private Animator characterAnimator;
     [SerializeField] private string shootTrigger = "Dispara";
+    [SerializeField] private string fireButton = "Fire1";
+    [SerializeField] private ShootEventSource2D shootEventSource;
 
-    private ProjectileMovement2D projectileMovement;
-
-    private void Start()
+    private void Awake()
     {
-        if (projectile == null)
+        if (projectilePrefab == null)
         {
-            Debug.LogError("ProjectileActivation2D necesita un proyectil asignado.", this);
-            return;
+            Debug.LogError("ProjectileActivation2D necesita un prefab de proyectil.", this);
         }
 
-        projectileMovement = projectile.GetComponent<ProjectileMovement2D>();
-        if (projectileMovement == null)
+        if (firePoint == null)
         {
-            Debug.LogError("El proyectil necesita un componente ProjectileMovement2D.", projectile);
+            Debug.LogError("ProjectileActivation2D necesita un punto de disparo.", this);
         }
+    }
 
-        projectile.SetActive(false);
+    private void OnEnable()
+    {
+        if (shootEventSource != null)
+        {
+            shootEventSource.ShootRequested += ActivateProjectile;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (shootEventSource != null)
+        {
+            shootEventSource.ShootRequested -= ActivateProjectile;
+        }
+    }
+
+    private void Update()
+    {
+        if (Input.GetButtonDown(fireButton))
+        {
+            ActivateProjectile();
+        }
     }
 
     public void ActivateProjectile()
     {
-        if (projectile == null) return;
+        if (projectilePrefab == null || firePoint == null) return;
 
-        projectile.SetActive(true);
-        if (projectileMovement != null)
-        {
-            projectileMovement.StartMoving();
-        }
+        ProjectileMovement2D projectile = Instantiate(
+            projectilePrefab,
+            firePoint.position,
+            firePoint.rotation
+        );
+        projectile.StartMoving();
 
         if (characterAnimator != null)
         {
