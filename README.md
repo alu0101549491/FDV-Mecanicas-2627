@@ -509,7 +509,76 @@ Mecánica de disparo: Desarrollo de la acción de disparo de forma incremental c
 
 - Sprite y visibilidad. Crea un GameObject con un sprite para el proyectil. Al iniciar el juego debe estar desactivado (SetActive(false)). Añade un botón de UI que lo active con SetActive(true). Crea una animación Vuelo para el proyectil que se reproduzca al activarse (estado por defecto del Animator). El personaje tendrá sus propias animaciones, con al menos la transición Idle → Dispara mediante un Trigger.
 
+Para este primer paso, se añadió `ProjectileActivation2D` al jugador y se asignó el proyectil que será su hijo. El método público `ActivateProjectile()` se conectó al evento `OnClick` del botón UI. El script desactiva el proyectil al iniciar, lo activa al pulsar el botón y lanza el trigger `Dispara` del Animator del personaje si está asignado.
+
+```csharp
+public class ProjectileActivation2D : MonoBehaviour
+{
+    [SerializeField] private GameObject projectile;
+    [SerializeField] private Animator characterAnimator;
+    [SerializeField] private string shootTrigger = "Dispara";
+    
+    private void Start()
+    {
+        if (projectile == null)
+        {
+            Debug.LogError("ProjectileActivation2D necesita un proyectil asignado.", this);
+            return;
+        }
+        
+        projectile.SetActive(false);
+    }
+
+    public void ActivateProjectile()
+    {
+        if (projectile == null) return;
+
+        projectile.SetActive(true);
+        
+        if (characterAnimator != null)
+        {
+            characterAnimator.SetTrigger(shootTrigger);
+        }
+    }
+}
+```
+
+![DisparoVisibilidad](Media/DisparoVisibilidad.gif)
+
 - Jerarquía. Coloca el proyectil como hijo del jugador y comprueba que se mueve con él. Haz que el proyectil avance al activarse. Compara: (a) desactivar el SpriteRenderer (SpriteRenderer.enabled = false) del jugador y (b) desactivar el GameObject del jugador con SetActive(false). ¿Qué ocurre con el proyectil en cada caso? ¿Qué pasa si el jugador se mueve mientras el proyectil vuela?.
+
+Para este paso, se añadió `ProjectileMovement2D` al proyectil. El método `StartMoving()` se conectó al evento `OnAnimationEvent` de la animación Vuelo del proyectil. El script mueve el proyectil hacia la derecha a una velocidad configurable mientras está activo.
+
+```csharp
+public class ProjectileMovement2D : MonoBehaviour
+{
+    [SerializeField, Min(0f)] private float speed = 5f;
+
+    private bool isMoving;
+    private Vector2 movementDirection;
+
+    private void OnEnable()
+    {
+        isMoving = false;
+        movementDirection = Vector2.zero;
+    }
+
+    private void Update()
+    {
+        if (!isMoving) return;
+
+        transform.Translate(movementDirection * speed * Time.deltaTime, Space.World);
+    }
+
+    public void StartMoving()
+    {
+        movementDirection = transform.right.normalized;
+        isMoving = true;
+    }
+}
+```
+
+![DisparoMovimiento](Media/DisparoMovimiento.gif)
 
 - Ocultamiento automático. Haz que el proyectil se desactive solo, al cabo de un tiempo (usando una corrutina) o al terminar la animación (usando un Animation Event). Sincroniza el disparo del proyectil con el Trigger Dispara del personaje.
 
